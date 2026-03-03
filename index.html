@@ -798,6 +798,25 @@
             margin-bottom: 4px;
         }
 
+        .pickup-entry-remove {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .pickup-entry-remove:hover {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--danger);
+        }
+
         .pickup-entry-num {
             font-weight: 700;
             color: var(--accent-hover);
@@ -922,6 +941,31 @@
             transform: scale(0.95);
         }
 
+        /* Pickup badge */
+        .pickup-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            background: var(--danger);
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5px;
+            line-height: 1;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+            pointer-events: none;
+        }
+
+        .pickup-badge.visible {
+            display: flex;
+        }
+
         /* Shift floating button when pickup panel is open */
         body.pickup-panel-open #pickupBtn {
             right: 388px;
@@ -961,7 +1005,8 @@
     </header>
 
     <!-- Floating Pickup Button -->
-    <button id="pickupBtn" onclick="showPickupModal()" title="Pickup">🎯</button>
+    <button id="pickupBtn" onclick="showPickupModal()" title="Pickup">🎯<span class="pickup-badge"
+            id="pickupBadge"></span></button>
 
     <div id="landing" class="landing">
         <div class="landing-icon">📋</div>
@@ -1073,6 +1118,7 @@
                 pickupConflict: 'Used by another weapon',
                 pickupExitBtn: '✕ Exit Pickup',
                 pickupEmpty: 'Click a row to pick it',
+                pickupClearConfirm: 'Are you sure you want to clear all picks?',
                 // Global Filter
                 globalFilter: '🔍 Global Filter',
                 globalFilterBonus: 'Bonus',
@@ -1113,8 +1159,8 @@
                 statsUniqueSeries: 'ユニークシリーズ',
                 pickupBtn: '🎯 ピックアップ',
                 pickupSelectMode: 'モード選択',
-                pickupLottery: '抽選',
-                pickupGrinding: '研磨',
+                pickupLottery: 'スキル',
+                pickupGrinding: 'ボーナス',
                 pickupTitle: '🎯 ピックアップリスト',
                 pickupClearAll: '全解除',
                 pickupTotal: '選択数',
@@ -1122,6 +1168,7 @@
                 pickupConflict: '他の武器で使用中',
                 pickupExitBtn: '✕ ピックアップ終了',
                 pickupEmpty: '行をクリックして選択',
+                pickupClearConfirm: 'すべてのピックをクリアしますか？',
                 // Global Filter
                 globalFilter: '🔍 グローバルフィルター',
                 globalFilterBonus: 'ボーナス',
@@ -1297,6 +1344,7 @@
             pickedAttempts = [];
             usedAttemptNums.clear();
             pickupModeType = null;
+            updatePickupBadge();
 
             // First pass: assign colors consistently
             const allGroupSkills = new Set();
@@ -1834,6 +1882,11 @@
         let usedAttemptNums = new Set();
 
         function showPickupModal() {
+            // If picks exist, re-open directly without modal
+            if (pickedAttempts.length > 0 && pickupModeType) {
+                enterPickupMode(pickupModeType);
+                return;
+            }
             document.getElementById('pickupModalOverlay').classList.add('active');
         }
 
@@ -1942,6 +1995,7 @@
 
             renderPickupPanel();
             applyPickupRowStates();
+            updatePickupBadge();
         }
 
         function rebuildUsedAttemptNums() {
@@ -1950,12 +2004,36 @@
         }
 
         function clearAllPicks() {
+            if (pickedAttempts.length > 0 && !confirm(t('pickupClearConfirm'))) return;
+
             pickedAttempts = [];
             usedAttemptNums.clear();
             pickupModeType = null;
             renderPickupPanel();
             applyPickupRowStates();
+            updatePickupBadge();
             exitPickupMode();
+        }
+
+        function removePickedItem(wIdx, attemptNum) {
+            const idx = pickedAttempts.findIndex(p => p.wIdx === wIdx && p.attemptNum === attemptNum);
+            if (idx < 0) return;
+            pickedAttempts.splice(idx, 1);
+            rebuildUsedAttemptNums();
+            renderPickupPanel();
+            applyPickupRowStates();
+            updatePickupBadge();
+        }
+
+        function updatePickupBadge() {
+            const badge = document.getElementById('pickupBadge');
+            if (!badge) return;
+            if (pickedAttempts.length > 0) {
+                badge.textContent = pickedAttempts.length;
+                badge.classList.add('visible');
+            } else {
+                badge.classList.remove('visible');
+            }
         }
 
         function applyPickupRowStates() {
@@ -1997,6 +2075,7 @@
                     <div class="pickup-entry-header">
                         <span class="pickup-entry-num">#${p.attemptNum}</span>
                         <span class="pickup-entry-nickname">\u2192 ${escHtml(p.nickname)}</span>
+                        <button class="pickup-entry-remove" onclick="event.stopPropagation(); removePickedItem(${p.wIdx}, ${p.attemptNum})" title="Remove">✕</button>
                     </div>
                     <div class="pickup-entry-detail">${escHtml(p.detail)}</div>
                 </div>
