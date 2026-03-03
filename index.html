@@ -1292,7 +1292,11 @@
             skillColorMap = {};
             colorIndex = 0;
             highlightedSkills.clear();
+            // Fully reset pickup state on new file load
             if (pickupMode) exitPickupMode();
+            pickedAttempts = [];
+            usedAttemptNums.clear();
+            pickupModeType = null;
 
             // First pass: assign colors consistently
             const allGroupSkills = new Set();
@@ -1840,9 +1844,13 @@
         function enterPickupMode(modeType) {
             hidePickupModal();
             pickupMode = true;
-            pickupModeType = modeType;
-            pickedAttempts = [];
-            usedAttemptNums.clear();
+
+            // Only reset data when switching to a different mode
+            if (pickupModeType !== modeType) {
+                pickupModeType = modeType;
+                pickedAttempts = [];
+                usedAttemptNums.clear();
+            }
 
             // Clear existing highlights
             clearAllHighlights();
@@ -1870,9 +1878,7 @@
 
         function exitPickupMode() {
             pickupMode = false;
-            pickupModeType = null;
-            pickedAttempts = [];
-            usedAttemptNums.clear();
+            // Keep pickupModeType, pickedAttempts, usedAttemptNums intact
 
             document.body.classList.remove('pickup-active', 'pickup-panel-open');
             document.getElementById('pickupPanel').classList.remove('open');
@@ -1946,8 +1952,10 @@
         function clearAllPicks() {
             pickedAttempts = [];
             usedAttemptNums.clear();
+            pickupModeType = null;
             renderPickupPanel();
             applyPickupRowStates();
+            exitPickupMode();
         }
 
         function applyPickupRowStates() {
