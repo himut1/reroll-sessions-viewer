@@ -143,8 +143,8 @@
                 // Global Filter
                 globalFilter: '🔍 Global Filter',
                 globalFilterBonus: 'Bonus',
-                globalFilterExact: 'Exact',
                 globalFilterCategory: 'Category',
+                globalFilterExact: 'Exact',
                 // Errors
                 jsonParseError: 'Failed to parse JSON: ',
             },
@@ -192,11 +192,10 @@
                 pickupExitBtn: '✕ ピックアップ終了',
                 pickupEmpty: '行をクリックして選択',
                 pickupClearConfirm: 'すべてのピックをクリアしますか？',
-                // Global Filter
                 globalFilter: '🔍 グローバルフィルター',
                 globalFilterBonus: 'ボーナス',
-                globalFilterExact: '完全一致',
                 globalFilterCategory: 'カテゴリ',
+                globalFilterExact: '完全一致',
                 jsonParseError: 'JSONの解析に失敗しました: ',
             },
         };
@@ -727,7 +726,6 @@
 
         // ── Global Filter System ──
         let globalFilterMode = null; // 'lottery' or 'grinding' or null
-        let globalFilterBonusMode = 'exact'; // 'exact' or 'category'
         let globalFilterAllGroups = [];
         let globalFilterAllSeries = [];
         let globalFilterAllBonuses = [];
@@ -836,23 +834,19 @@
                         </select>
                     </div>`;
             } else {
-                // Grinding: Exact / Category toggle + 5 dropdowns
-                const isCategory = globalFilterBonusMode === 'category';
-                const options = isCategory ? globalFilterAllCategories : globalFilterAllBonuses;
-                html += `
-                    <div class="gf-group">
-                        <div class="global-filter-mode" style="margin-bottom:2px">
-                            <button class="gf-mode-btn${!isCategory ? ' active' : ''}" onclick="toggleBonusMode('exact')">${t('globalFilterExact')}</button>
-                            <button class="gf-mode-btn${isCategory ? ' active' : ''}" onclick="toggleBonusMode('category')">${t('globalFilterCategory')}</button>
-                        </div>
-                    </div>`;
+                // Grinding: 5 dropdowns with Category + Exact optgroups
                 for (let i = 0; i < 5; i++) {
                     html += `
                     <div class="gf-group">
                         <label>${t('globalFilterBonus')} ${i + 1}</label>
                         <select data-gf-type="bonus" data-gf-idx="${i}" onchange="applyGlobalFilter()">
                             <option value="">${t('filterAll')}</option>
-                            ${options.map(b => `<option value="${escAttr(b)}">${escHtml(b)}</option>`).join('')}
+                            <optgroup label="${t('globalFilterCategory')}">
+                                ${globalFilterAllCategories.map(c => `<option value="cat:${escAttr(c)}">${escHtml(c)}</option>`).join('')}
+                            </optgroup>
+                            <optgroup label="${t('globalFilterExact')}">
+                                ${globalFilterAllBonuses.map(b => `<option value="${escAttr(b)}">${escHtml(b)}</option>`).join('')}
+                            </optgroup>
                         </select>
                     </div>`;
                 }
@@ -880,26 +874,41 @@
                         tr.style.display = (matchG && matchS) ? '' : 'none';
                     });
                 } else {
-                    // Grinding: AND condition on selected bonuses
+                    // Grinding: AND condition on selected bonuses (category or exact)
                     const bonusSelects = document.querySelectorAll('select[data-gf-type="bonus"]');
-                    const requiredBonuses = [...bonusSelects].map(s => s.value).filter(v => v);
-                    const isCategory = globalFilterBonusMode === 'category';
+                    const rawValues = [...bonusSelects].map(s => s.value).filter(v => v);
 
-                    // Count required occurrences (handles duplicate selections)
-                    const requiredCounts = {};
-                    requiredBonuses.forEach(b => { requiredCounts[b] = (requiredCounts[b] || 0) + 1; });
+                    // Separate category ("cat:xxx") and exact values, count occurrences
+                    const catCounts = {};
+                    const exactCounts = {};
+                    rawValues.forEach(v => {
+                        if (v.startsWith('cat:')) {
+                            const base = v.slice(4);
+                            catCounts[base] = (catCounts[base] || 0) + 1;
+                        } else {
+                            exactCounts[v] = (exactCounts[v] || 0) + 1;
+                        }
+                    });
 
                     tbody.querySelectorAll('tr').forEach(tr => {
-                        if (requiredBonuses.length === 0) {
+                        if (rawValues.length === 0) {
                             tr.style.display = '';
                             return;
                         }
                         const rowBonuses = (tr.dataset.bonuses || '').split('|');
-                        const rowVals = isCategory ? rowBonuses.map(getBonusBaseName) : rowBonuses;
-                        const rowCounts = {};
-                        rowVals.forEach(b => { rowCounts[b] = (rowCounts[b] || 0) + 1; });
-                        const match = Object.entries(requiredCounts).every(([b, cnt]) => (rowCounts[b] || 0) >= cnt);
-                        tr.style.display = match ? '' : 'none';
+
+                        // Build counts for exact and category matching
+                        const rowExactCounts = {};
+                        const rowCatCounts = {};
+                        rowBonuses.forEach(b => {
+                            rowExactCounts[b] = (rowExactCounts[b] || 0) + 1;
+                            const base = getBonusBaseName(b);
+                            rowCatCounts[base] = (rowCatCounts[base] || 0) + 1;
+                        });
+
+                        const matchExact = Object.entries(exactCounts).every(([b, cnt]) => (rowExactCounts[b] || 0) >= cnt);
+                        const matchCat = Object.entries(catCounts).every(([b, cnt]) => (rowCatCounts[b] || 0) >= cnt);
+                        tr.style.display = (matchExact && matchCat) ? '' : 'none';
                     });
                 }
 
@@ -907,11 +916,6 @@
             });
         }
 
-        function toggleBonusMode(mode) {
-            globalFilterBonusMode = mode;
-            renderGlobalFilterControls();
-            applyGlobalFilter();
-        }
 
         function resetGlobalFilter() {
             // Reset all global filter selects
