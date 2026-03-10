@@ -895,19 +895,30 @@
                             tr.style.display = '';
                             return;
                         }
-                        const rowBonuses = (tr.dataset.bonuses || '').split('|');
+                        // Work with a consumable pool of row bonuses
+                        const pool = (tr.dataset.bonuses || '').split('|').slice();
 
-                        // Build counts for exact and category matching
-                        const rowExactCounts = {};
-                        const rowCatCounts = {};
-                        rowBonuses.forEach(b => {
-                            rowExactCounts[b] = (rowExactCounts[b] || 0) + 1;
-                            const base = getBonusBaseName(b);
-                            rowCatCounts[base] = (rowCatCounts[base] || 0) + 1;
-                        });
+                        // 1) Consume exact matches first
+                        let matchExact = true;
+                        for (const [b, cnt] of Object.entries(exactCounts)) {
+                            let found = 0;
+                            for (let i = 0; i < pool.length && found < cnt; i++) {
+                                if (pool[i] === b) { pool.splice(i, 1); i--; found++; }
+                            }
+                            if (found < cnt) { matchExact = false; break; }
+                        }
 
-                        const matchExact = Object.entries(exactCounts).every(([b, cnt]) => (rowExactCounts[b] || 0) >= cnt);
-                        const matchCat = Object.entries(catCounts).every(([b, cnt]) => (rowCatCounts[b] || 0) >= cnt);
+                        // 2) Check category matches against remaining pool
+                        let matchCat = true;
+                        if (matchExact) {
+                            const remainCatCounts = {};
+                            pool.forEach(b => {
+                                const base = getBonusBaseName(b);
+                                remainCatCounts[base] = (remainCatCounts[base] || 0) + 1;
+                            });
+                            matchCat = Object.entries(catCounts).every(([b, cnt]) => (remainCatCounts[b] || 0) >= cnt);
+                        }
+
                         tr.style.display = (matchExact && matchCat) ? '' : 'none';
                     });
                 }
